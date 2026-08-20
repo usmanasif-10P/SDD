@@ -3,30 +3,60 @@ schema: spec-driven
 # Project context (optional)
 # This is shown to AI when creating artifacts.
 # Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Project: todo-management-app (FastAPI + PostgreSQL service for per-user todo management with JWT auth).
+
+  Tech stack:
+    - Language: Python >=3.11
+    - Framework: FastAPI (>=0.110) served via Uvicorn
+    - ORM: SQLAlchemy 2.0 (async) with asyncpg driver
+    - Migrations: Alembic
+    - Validation: Pydantic v2 + pydantic-settings
+    - Auth: JWT (python-jose) with bcrypt password hashing (passlib)
+    - DB (sync fallback/tests): psycopg2-binary
+    - Testing: pytest + pytest-asyncio (asyncio_mode = "auto"), httpx for async HTTP tests
+    - Layout: `app/` package with subpackages api, core, db, repositories, schemas, services; `alembic/` for migrations; `tests/` mirrors app layout via conftest fixtures
+
+  Conventions:
+    - Package manager: pip (requirements.txt is the source of truth); pyproject.toml carries project metadata + pytest config
+    - Config: environment variables loaded via pydantic-settings; .env (gitignored) overrides .env.example defaults
+    - DB URL: loaded from DATABASE_URL env var in `alembic/env.py`; never hardcode credentials
+    - bcrypt pinned to 4.0.1 (passlib compatibility constraint)
+    - Tests run with `pytest`; pytest config sets `pythonpath = ["."]` so `app.*` imports work without installation
+    - Async code uses SQLAlchemy 2.0 async session patterns
+
+  Domain:
+    - Per-user todo CRUD with JWT-authenticated endpoints
+    - Auth flows: registration, login, password hashing, token issuance/verification
+    - Resources: users, todos (owned by users; ownership enforced on read/write)
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - Keep proposals focused on user-visible behavior changes (endpoints, auth, data model, permissions); avoid speculative refactors
+    - Always include a "Non-goals" section to explicitly bound scope
+    - Reference affected app subpackages (api, core, db, repositories, schemas, services) and corresponding test modules
+  tasks:
+    - Break work into ordered chunks: schema/model change -> alembic migration -> repository/service -> API route -> tests
+    - Include explicit tasks for: Alembic migration generation + upgrade, pytest run, and curl/httpx smoke check when relevant
+    - Group DB-touching tasks so the migration lands before repository/service code that depends on the new column
+  specs:
+    - Use `#### Scenario:` blocks with Given/When/Then for each endpoint behavior
+    - Specify ownership/authorization expectations explicitly (e.g., user can only access their own todos)
+    - Include validation rules (required fields, length limits, email format) as scenarios
 
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.
 # This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+operations:
+  apply:
+    guidance:
+      - Run `pytest` after implementation; do not mark tasks complete with failing tests
+      - Run `alembic upgrade head` (and `alembic downgrade -1` round-trip) when schema changes are introduced
+      - Keep test summaries concise: list pass/fail counts and any skipped tests
+      - Do not commit secrets; ensure `.env` remains gitignored and `.env.example` stays in sync with required keys
+  archive:
+    guidance:
+      - Summarize the archive outcome (what shipped, which endpoints/schemas/migrations changed) before finishing
+      - Confirm the change's tasks are all checked off before archiving
